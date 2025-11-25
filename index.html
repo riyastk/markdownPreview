@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Markdown Previewer</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for Inter font and layout */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8; /* Light blue-gray background */
+        }
+        /* Custom styling for the textareas */
+        .markdown-editor {
+            resize: none;
+            min-height: 50vh;
+            line-height: 1.6;
+            tab-size: 4;
+            /* Hide the scrollbar for aesthetics, but keep it functional */
+            scrollbar-width: none; /* Firefox */
+            -ms-overflow-style: none;  /* IE and Edge */
+        }
+        .markdown-editor::-webkit-scrollbar {
+            display: none; /* Chrome, Safari, and Opera */
+        }
+        /* Styling for the output panel */
+        #outputPanel {
+            min-height: 50vh;
+            line-height: 1.6;
+            overflow-y: auto;
+        }
+        /* Basic styling for rendered elements */
+        #outputPanel h1 { font-size: 1.875rem; font-weight: 700; margin-top: 1.5rem; margin-bottom: 0.75rem; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.25rem;}
+        #outputPanel h2 { font-size: 1.5rem; font-weight: 600; margin-top: 1.25rem; margin-bottom: 0.5rem; }
+        #outputPanel p { margin-bottom: 1rem; }
+        #outputPanel ul { list-style: disc; margin-left: 1.5rem; margin-bottom: 1rem; }
+        #outputPanel pre { background-color: #1e293b; color: #f8fafc; padding: 0.75rem; border-radius: 0.5rem; overflow-x: auto; font-family: monospace; }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div class="max-w-7xl mx-auto">
+        <h1 class="text-4xl font-extrabold text-gray-900 mb-6 text-center">
+            Markdown Live Previewer
+        </h1>
+        <p class="text-center text-gray-600 mb-8">
+            Start typing Markdown syntax on the left, and see the rendered HTML in real-time on the right.
+        </p>
+
+        <!-- Main Workspace: Two Columns (Input and Output) -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+            <!-- Input Area -->
+            <div class="bg-white shadow-xl rounded-xl border border-gray-200">
+                <div class="p-4 bg-gray-100 border-b rounded-t-xl">
+                    <h2 class="text-xl font-semibold text-gray-700">Markdown Input</h2>
+                </div>
+                <textarea
+                    id="markdownInput"
+                    class="markdown-editor w-full p-4 text-gray-800 focus:outline-none rounded-b-xl"
+                    placeholder="Type your markdown here..."
+                    oninput="updatePreview()"
+                ># Welcome to the Live Previewer
+
+**This is a simple project** to help activate your GitHub profile!
+
+## How it works
+* It converts basic Markdown syntax to HTML in real-time.
+* It's a single, self-contained file.
+* It uses Tailwind CSS for a modern, responsive look.
+
+### Code Block Example
+For a real app, you would use a robust library.
+
+```javascript
+const example = "Hello World";
+console.log(example);
+```
+</textarea>
+            </div>
+
+            <!-- Output Area -->
+            <div class="bg-white shadow-xl rounded-xl border border-gray-200">
+                <div class="p-4 bg-indigo-500 border-b rounded-t-xl">
+                    <h2 class="text-xl font-semibold text-white">Rendered Output</h2>
+                </div>
+                <div id="outputPanel" class="p-4 text-gray-800">
+                    <!-- Preview content will be dynamically inserted here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const markdownInput = document.getElementById('markdownInput');
+        const outputPanel = document.getElementById('outputPanel');
+        
+        /**
+         * A very basic, simple Markdown-to-HTML converter function.
+         * For a production app, a full library like marked.js is recommended.
+         * This simple version demonstrates the principle of real-time parsing.
+         * @param {string} markdownText - The raw Markdown text input.
+         * @returns {string} - The generated HTML string.
+         */
+        function simpleMarkdownToHtml(markdownText) {
+            let html = markdownText;
+
+            // 1. Code Blocks (MUST be done first to protect content)
+            // Finds content inside triple backticks and wraps it in <pre> tags
+            html = html.replace(/```(\w+)?\n([\s\S]*?)\n```/g, function(match, lang, code) {
+                // Escape HTML characters inside the code block
+                const escapedCode = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                return `<pre><code>${escapedCode}</code></pre>`;
+            });
+
+
+            // 2. Headings (H1, H2, H3)
+            html = html.replace(/^###\s*(.*)$/gm, '<h3>$1</h3>');
+            html = html.replace(/^##\s*(.*)$/gm, '<h2>$1</h2>');
+            html = html.replace(/^#\s*(.*)$/gm, '<h1>$1</h1>');
+
+            // 3. Simple List Items (only handles bullet points for simplicity)
+            html = html.replace(/^- (.*)$/gm, '<li>$1</li>');
+            // Wrap contiguous <li> elements in <ul>
+            html = html.replace(/(\n|^)(<li>.*?<\/li>)+/gs, function(match) {
+                return `\n<ul>${match.trim()}</ul>\n`;
+            });
+
+
+            // 4. Inline formatting (Bold and Italic)
+            // Bold: **text**
+            html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            // Italic: *text*
+            html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+
+            // 5. Paragraphs and Line Breaks
+            // Replace double line breaks with closing/opening paragraph tags
+            // Note: This is an oversimplification but works for common text blocks
+            html = html.split('\n\n').map(p => {
+                // Don't wrap lines that are already part of block elements like <h1>, <ul>, <pre>
+                if (p.startsWith('<h') || p.startsWith('<ul>') || p.startsWith('<pre')) {
+                    return p;
+                }
+                // Wrap simple text blocks in paragraph tags
+                return `<p>${p.replace(/\n/g, '<br>')}</p>`;
+            }).join('');
+            
+            // Cleanup extra newlines from replacement process
+            html = html.replace(/\n/g, '');
+
+
+            // Initial load requires a call to update the preview
+            return html;
+        }
+
+        /**
+         * Main function to call on input change.
+         */
+        function updatePreview() {
+            const markdownText = markdownInput.value;
+            const renderedHtml = simpleMarkdownToHtml(markdownText);
+            outputPanel.innerHTML = renderedHtml;
+        }
+
+        // Initialize the preview on page load
+        window.onload = function() {
+            updatePreview();
+        };
+
+    </script>
+</body>
+</html>
